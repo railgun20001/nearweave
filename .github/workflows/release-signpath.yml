@@ -1,0 +1,190 @@
+name: SignPath 双重签名发布
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 已存在且与清单版本一致的标签，例如 v0.4.1
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  sign-and-release:
+    name: 签名主程序、生成并签名安装包
+    runs-on: windows-latest
+    timeout-minutes: 360
+    outputs:
+      release_tag: ${{ steps.version.outputs.tag }}
+
+    steps:
+      - name: 检出发布标签
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.release_tag }}
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.17.0
+          run_install: false
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.97.1
+
+      - name: 缓存 Rust 构建结果
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: 安装依赖并校验版本
+        id: version
+        shell: pwsh
+        run: |
+          pnpm install --frozen-lockfile
+          $version = (Get-Content -LiteralPath "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json).version
+          if ("v$version" -cne "${{ inputs.release_tag }}") {
+            throw "发布标签与应用版本不一致"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+
+      - name: 验证并构建未打包主程序
+        shell: pwsh
+        run: |
+          pnpm build
+          cargo fmt --manifest-path src-tauri/Cargo.toml --check
+          cargo test --manifest-path src-tauri/Cargo.toml --all-targets
+          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+          pnpm tauri build --no-bundle --ci --no-sign
+
+      - name: 校验主程序元数据
+        shell: pwsh
+        run: |
+          $info = (Get-Item -LiteralPath "src-tauri/target/release/nearweave.exe").VersionInfo
+          if ($info.ProductName -cne "NearWeave" -or
+              $info.CompanyName -cne "railgun20001" -or
+              -not $info.ProductVersion.StartsWith("${{ steps.version.outputs.version }}") -or
+              -not $info.FileVersion.StartsWith("${{ steps.version.outputs.version }}")) {
+            throw "主程序签名前元数据不符合 NearWeave 策略"
+          }
+
+      - name: 上传未签名主程序
+        id: upload-unsigned-exe
+        uses: actions/upload-artifact@v7
+        with:
+          name: nearweave-unsigned-exe
+          path: src-tauri/target/release/nearweave.exe
+          archive: false
+
+      - name: 提交主程序 SignPath 请求并等待人工批准
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_EXE_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned-exe.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 21600
+          output-artifact-directory: signed-exe
+          parameters: |
+            version: "${{ steps.version.outputs.version }}"
+
+      - name: 安装已签名主程序并生成 NSIS
+        shell: pwsh
+        run: |
+          $signedExe = Get-ChildItem -LiteralPath "signed-exe" -Recurse -Filter "nearweave.exe" | Select-Object -First 1
+          if (-not $signedExe) { throw "SignPath 未返回已签名主程序" }
+          $signature = Get-AuthenticodeSignature -LiteralPath $signedExe.FullName
+          if ($signature.Status -ne "Valid" -or $signature.SignerCertificate.Subject -notmatch "SignPath Foundation") {
+            throw "主程序 Authenticode 签名无效"
+          }
+          Copy-Item -LiteralPath $signedExe.FullName -Destination "src-tauri/target/release/nearweave.exe" -Force
+          pnpm tauri bundle --bundles nsis --ci --no-sign --config '{"bundle":{"createUpdaterArtifacts":false}}'
+          $generated = Get-ChildItem -LiteralPath "src-tauri/target/release/bundle/nsis" -Filter "*.exe" | Select-Object -First 1
+          if (-not $generated) { throw "未生成 NSIS 安装包" }
+          $target = "src-tauri/target/release/bundle/nsis/nearweave_${{ steps.version.outputs.version }}_x64-setup.exe"
+          Move-Item -LiteralPath $generated.FullName -Destination $target -Force
+
+      - name: 上传未签名安装包
+        id: upload-unsigned-installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: nearweave-unsigned-installer
+          path: src-tauri/target/release/bundle/nsis/nearweave_${{ steps.version.outputs.version }}_x64-setup.exe
+          archive: false
+
+      - name: 提交安装包 SignPath 请求并等待人工批准
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_NSIS_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned-installer.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 21600
+          output-artifact-directory: signed-installer
+          parameters: |
+            version: "${{ steps.version.outputs.version }}"
+
+      - name: 生成最终 Updater 签名和更新清单
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $signedInstaller = Get-ChildItem -LiteralPath "signed-installer" -Recurse -Filter "*.exe" | Select-Object -First 1
+          if (-not $signedInstaller) { throw "SignPath 未返回已签名安装包" }
+          $target = "release/nearweave_${{ steps.version.outputs.version }}_x64-setup.exe"
+          New-Item -ItemType Directory -Path "release" -Force | Out-Null
+          Copy-Item -LiteralPath $signedInstaller.FullName -Destination $target -Force
+          $signature = Get-AuthenticodeSignature -LiteralPath $target
+          if ($signature.Status -ne "Valid" -or $signature.SignerCertificate.Subject -notmatch "SignPath Foundation") {
+            throw "安装包 Authenticode 签名无效"
+          }
+          pnpm tauri signer sign $target
+          ./scripts/create-updater-manifest.ps1 `
+            -Installer $target `
+            -Version "${{ steps.version.outputs.version }}" `
+            -Repository "railgun20001/nearweave" `
+            -Output "release/latest.json"
+          $hash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $(Split-Path -Leaf $target)" | Set-Content -LiteralPath "$target.sha256" -Encoding ASCII
+
+      - name: 发布最终签名产物
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" `
+            --title "NearWeave ${{ steps.version.outputs.tag }}" `
+            --notes "NearWeave Windows x64 稳定版。Free code signing provided by SignPath.io, certificate by SignPath Foundation. Code signing policy: https://github.com/railgun20001/nearweave/blob/main/CODE_SIGNING_POLICY.md" `
+            "release/nearweave_${{ steps.version.outputs.version }}_x64-setup.exe" `
+            "release/nearweave_${{ steps.version.outputs.version }}_x64-setup.exe.sig" `
+            "release/nearweave_${{ steps.version.outputs.version }}_x64-setup.exe.sha256" `
+            "release/latest.json"
+
+  sync-gitee:
+    name: 同步最终签名产物到 Gitee
+    needs: sign-and-release
+    uses: ./.github/workflows/sync-gitee.yml
+    with:
+      release_tag: ${{ needs.sign-and-release.outputs.release_tag }}
+    secrets:
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}

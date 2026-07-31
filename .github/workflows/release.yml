@@ -1,0 +1,96 @@
+name: 发布 Windows 更新
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    name: 构建并发布 Windows x64
+    runs-on: windows-latest
+    outputs:
+      app_version: ${{ steps.tauri-release.outputs.appVersion }}
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.17.0
+          run_install: false
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.97.1
+
+      - name: 缓存 Rust 构建结果
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: 安装前端依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 验证前端与 Rust
+        shell: pwsh
+        run: |
+          pnpm build
+          cargo fmt --manifest-path src-tauri/Cargo.toml --check
+          cargo test --manifest-path src-tauri/Cargo.toml --all-targets
+          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: 校验版本标签
+        shell: pwsh
+        run: |
+          $version = (Get-Content -LiteralPath "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json).version
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne "v$version") {
+            throw "Git 标签 $env:GITHUB_REF_NAME 与应用版本 v$version 不一致"
+          }
+
+      - name: 构建签名安装包并发布
+        id: tauri-release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: NearWeave v__VERSION__
+          releaseBody: |
+            NearWeave v__VERSION__ Windows x64 安装包（附近设备互传）。
+            已安装版本可在“设置 → 软件更新”中完成签名校验和自动升级。
+            Code signing policy: https://github.com/railgun20001/nearweave/blob/main/CODE_SIGNING_POLICY.md
+            Privacy policy: https://github.com/railgun20001/nearweave/blob/main/PRIVACY.md
+            SignPath Foundation 免费开源签名申请尚在审核中；本版本包含 Tauri Updater 签名，但暂未包含 Windows Authenticode 签名。
+          releaseDraft: false
+          prerelease: false
+          generateReleaseNotes: true
+          releaseAssetNamePattern: "nearweave_[version]_[arch][setup][ext]"
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+
+  sync-gitee:
+    name: 同步 Gitee 国内更新源
+    needs: release-windows
+    uses: ./.github/workflows/sync-gitee.yml
+    with:
+      release_tag: ${{ format('v{0}', needs.release-windows.outputs.app_version) }}
+    secrets:
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}

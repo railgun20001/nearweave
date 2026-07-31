@@ -61,7 +61,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQyNzA0NjcyRkMyOEMyMzAKUldRd3dpajhja1p3UWxzYm9IcjZpdmtRQmtCcVVETmJXNlVlbElOOVFMU0lQYjNmZ2NMWTl5RkcK",
       "endpoints": [
-        "https://gitee.com/railgun20001/nearweave/raw/updater/latest.json",
+        "https://gitee.com/railgun20001/nearweave-updates/raw/main/latest.json",
         "https://github.com/railgun20001/nearweave/releases/latest/download/latest.json"
       ],
       "windows": {
