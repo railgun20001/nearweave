@@ -1,0 +1,59 @@
+[package]
+name = "nearweave"
+version = "0.4.0"
+description = "通过局域网或蓝牙在附近设备间共享文件、目录与剪贴板"
+authors = ["railgun20001"]
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/railgun20001/nearweave"
+homepage = "https://github.com/railgun20001/nearweave"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "nearweave_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+arboard = "3.6"
+chacha20poly1305 = "0.10"
+dirs = "6"
+if-addrs = "0.14"
+# Tauri Updater 关闭了 reqwest 默认特性，显式恢复 Windows 与 macOS 的系统代理读取。
+reqwest = { version = "0.13", default-features = false, features = ["system-proxy"] }
+sha2 = "0.10"
+snow = "0.10"
+tauri = { version = "2.11", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-autostart = "2"
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "sync", "time"] }
+uuid = { version = "1", features = ["serde", "v4"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+clipboard-win = { version = "5.4", features = ["monitor"] }
+windows = { version = "0.62.2", features = [
+  "Devices_Bluetooth",
+  "Devices_Bluetooth_Rfcomm",
+  "Devices_Enumeration",
+  "Foundation",
+  "Foundation_Collections",
+  "Networking_Sockets",
+  "Storage_Streams",
+  "Win32_Foundation",
+  "Win32_Security_Cryptography",
+] }
+
+[dev-dependencies]
+tempfile = "3"
