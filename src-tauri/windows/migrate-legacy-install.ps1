@@ -69,12 +69,12 @@ if ($Phase -eq "PreInstall") {
     }
 
     if ($candidates.Count -gt 1) {
-        throw "检测到多个旧版当前用户安装项，已中止安装"
+        throw "Multiple legacy per-user installation entries were found"
     }
 
     if ($candidates.Count -eq 0) {
         if (Test-Path -LiteralPath $expectedOldProgram -PathType Leaf) {
-            throw "检测到没有有效卸载项的旧版程序，已中止安装"
+            throw "The legacy program exists without a valid uninstall entry"
         }
         $state | ConvertTo-Json | Set-Content -LiteralPath $StateFile -Encoding UTF8
         exit 0
@@ -82,29 +82,29 @@ if ($Phase -eq "PreInstall") {
 
     $entry = $candidates[0]
     if ([string]$entry.Publisher -cne $publisher) {
-        throw "旧版安装项发布者不匹配，已中止安装"
+        throw "The legacy installation publisher does not match"
     }
     $oldVersion = $null
     if (-not [version]::TryParse([string]$entry.DisplayVersion, [ref]$oldVersion) -or
         $oldVersion -lt [version]"0.1.0" -or $oldVersion -gt [version]"0.3.1") {
-        throw "旧版安装项版本不在允许迁移的范围内，已中止安装"
+        throw "The legacy version is outside the supported migration range"
     }
     if ((Normalize-Path ([string]$entry.InstallLocation)) -ine $expectedOldInstall) {
-        throw "旧版安装路径异常，已中止安装"
+        throw "The legacy installation path does not match"
     }
     if ((Get-CommandPath ([string]$entry.UninstallString)) -ine $expectedOldUninstaller) {
-        throw "旧版卸载程序路径异常，已中止安装"
+        throw "The legacy uninstaller path does not match"
     }
     if (-not (Test-Path -LiteralPath $expectedOldUninstaller -PathType Leaf) -or
         -not (Test-Path -LiteralPath $expectedOldProgram -PathType Leaf)) {
-        throw "旧版安装文件不完整，已中止安装"
+        throw "The legacy installation files are incomplete"
     }
 
     $running = @(Get-CimInstance Win32_Process -Filter "Name = '$oldBinaryName'" | Where-Object {
         $_.ExecutablePath -and (Normalize-Path $_.ExecutablePath) -ieq $expectedOldProgram
     })
     if ($running.Count -gt 0) {
-        throw "旧版程序仍在运行，请退出后重试"
+        throw "The legacy program is still running"
     }
 
     if (Test-Path -LiteralPath $runKey) {
@@ -122,7 +122,7 @@ if ($Phase -eq "PreInstall") {
 
     $process = Start-Process -FilePath $expectedOldUninstaller -ArgumentList "/S" -Wait -PassThru
     if ($process.ExitCode -ne 0) {
-        throw "旧版卸载程序返回错误码 $($process.ExitCode)，已中止安装"
+        throw "The legacy uninstaller returned exit code $($process.ExitCode)"
     }
 
     for ($attempt = 0; $attempt -lt 20; $attempt++) {
@@ -133,7 +133,7 @@ if ($Phase -eq "PreInstall") {
         Start-Sleep -Milliseconds 250
     }
     if ((Test-Path -LiteralPath $expectedOldProgram) -or (Test-Path -LiteralPath $entry.PSPath)) {
-        throw "旧版卸载未完整结束，已中止安装"
+        throw "The legacy uninstall did not complete"
     }
 
     $shortcutName = "$oldProductName.lnk"
@@ -147,7 +147,7 @@ if ($Phase -eq "PreInstall") {
 }
 
 if (-not (Test-Path -LiteralPath $StateFile -PathType Leaf)) {
-    throw "安装迁移状态文件不存在"
+    throw "The installation migration state file does not exist"
 }
 $state = Get-Content -LiteralPath $StateFile -Raw -Encoding UTF8 | ConvertFrom-Json
 try {
@@ -156,7 +156,7 @@ try {
         $normalizedProgram = Normalize-Path $Program
         if ($normalizedProgram -ine $expectedNewProgram -or
             -not (Test-Path -LiteralPath $normalizedProgram -PathType Leaf)) {
-            throw "NearWeave 安装路径异常，无法恢复开机启动"
+            throw "The NearWeave installation path is invalid for restoring autostart"
         }
         if (-not (Test-Path -LiteralPath $runKey)) {
             New-Item -Path $runKey -Force | Out-Null

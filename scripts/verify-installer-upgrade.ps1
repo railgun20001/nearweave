@@ -80,6 +80,12 @@ $migrationScriptPath = Join-Path $projectRoot "src-tauri\windows\migrate-legacy-
 $installerHooks = Get-Content -LiteralPath $installerHooksPath -Raw -Encoding UTF8
 $firewallScript = Get-Content -LiteralPath $firewallScriptPath -Raw -Encoding UTF8
 $migrationScript = Get-Content -LiteralPath $migrationScriptPath -Raw -Encoding UTF8
+foreach ($windowsPowerShellScriptPath in @($firewallScriptPath, $migrationScriptPath)) {
+    $windowsPowerShellScriptBytes = [IO.File]::ReadAllBytes($windowsPowerShellScriptPath)
+    if (@($windowsPowerShellScriptBytes | Where-Object { $_ -gt 0x7F }).Count -ne 0) {
+        throw "Installer PowerShell scripts must remain ASCII-only for Windows PowerShell 5.1: $windowsPowerShellScriptPath"
+    }
+}
 foreach ($marker in @(
     "NSIS_HOOK_PREINSTALL",
     "NSIS_HOOK_POSTINSTALL",
