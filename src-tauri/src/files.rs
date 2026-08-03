@@ -1134,7 +1134,6 @@ mod tests {
             device_id: Uuid::nil(),
             device_name: "test".into(),
             receive_directory: temporary.path().join("received"),
-            legacy_receive_directory: None,
             settings_path: temporary.path().join("settings.json"),
             trust_path: temporary.path().join("trusted-devices.json"),
             identity: DeviceIdentity {
@@ -1174,7 +1173,6 @@ mod tests {
             device_id: Uuid::nil(),
             device_name: "test".into(),
             receive_directory: temporary.path().join("received"),
-            legacy_receive_directory: None,
             settings_path: temporary.path().join("settings.json"),
             trust_path: temporary.path().join("trusted-devices.json"),
             identity: DeviceIdentity {
@@ -1215,7 +1213,6 @@ mod tests {
             device_id: Uuid::nil(),
             device_name: "test".into(),
             receive_directory: temporary.path().join("received"),
-            legacy_receive_directory: None,
             settings_path: temporary.path().join("settings.json"),
             trust_path: temporary.path().join("trusted-devices.json"),
             identity: DeviceIdentity {

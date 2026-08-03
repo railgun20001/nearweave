@@ -77,14 +77,10 @@ mod tests {
     }
 
     #[test]
-    fn legacy_listening_preference_is_ignored() {
+    fn partial_settings_use_defaults_for_missing_fields() {
         let temporary = tempfile::tempdir().expect("应创建测试目录");
         let path = temporary.path().join("settings.json");
-        fs::write(
-            &path,
-            br#"{"clipboardEnabled":false,"listeningEnabled":false}"#,
-        )
-        .expect("应写入旧版设置");
+        fs::write(&path, br#"{"clipboardEnabled":false}"#).expect("应写入部分设置");
 
         assert!(!load(&path).clipboard_enabled);
         assert!(!load(&path).lan_enabled);

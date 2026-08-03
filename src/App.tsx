@@ -173,7 +173,6 @@ interface AppSnapshot {
   lanEnabled: boolean;
   lanSetupRequired: boolean;
   receiveDirectory: string;
-  legacyReceiveDirectory: string | null;
   devices: NearbyDevice[];
   localShares: LocalShare[];
   remoteWorkspaces: RemoteWorkspace[];
@@ -239,7 +238,6 @@ const initialSnapshot: AppSnapshot = {
   lanEnabled: false,
   lanSetupRequired: true,
   receiveDirectory: "",
-  legacyReceiveDirectory: null,
   devices: [],
   localShares: [],
   remoteWorkspaces: [],
@@ -1141,24 +1139,6 @@ function App() {
                 <span>自动接收至</span>
                 <code>{snapshot.receiveDirectory || "正在准备目录…"}</code>
               </footer>
-              {snapshot.legacyReceiveDirectory && (
-                <footer
-                  className="receive-path legacy-receive-path"
-                  title={snapshot.legacyReceiveDirectory}
-                >
-                  <span>旧版接收文件仍保留在原目录</span>
-                  <button
-                    className="text-button"
-                    onClick={() =>
-                      execute("open-legacy-receive", () =>
-                        invoke("open_legacy_receive_directory"),
-                      )
-                    }
-                  >
-                    打开原目录
-                  </button>
-                </footer>
-              )}
             </section>
 
             <aside className="share-panel">

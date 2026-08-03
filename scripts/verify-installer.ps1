@@ -54,7 +54,7 @@ if ($tauriConfig.bundle.createUpdaterArtifacts -ne $true) {
     throw "Tauri updater artifacts must be enabled"
 }
 if ([string]::IsNullOrWhiteSpace([string]$tauriConfig.plugins.updater.pubkey)) {
-    throw "The preserved Tauri updater public key must not be empty"
+    throw "The Tauri updater public key must not be empty"
 }
 
 $expectedEndpoints = @(
@@ -81,12 +81,8 @@ $installerHooks = Get-Content -LiteralPath $installerHooksPath -Raw -Encoding UT
 $installerHelper = Get-Content -LiteralPath $installerHelperPath -Raw -Encoding UTF8
 $mainSource = Get-Content -LiteralPath $mainSourcePath -Raw -Encoding UTF8
 foreach ($marker in @(
-    "NSIS_HOOK_PREINSTALL",
-    "NSIS_HOOK_POSTINSTALL",
     "NSIS_HOOK_PREUNINSTALL",
-    "nearweave-installer-helper.exe",
-    "--nearweave-installer-helper migrate-pre",
-    "--nearweave-installer-helper migrate-post",
+    'StrCmp $UpdateMode 1',
     "--nearweave-installer-helper firewall-present",
     '--nearweave-installer-helper firewall-${ACTION}',
     'NEARWEAVE_RUN_FIREWALL "remove"'
@@ -102,15 +98,13 @@ foreach ($marker in @(
     'BSTR::from("LocalSubnet")',
     "SetEdgeTraversal(VARIANT_FALSE)",
     "SetApplicationName",
-    "legacy_version_is_supported",
-    "restore_autostart",
     "expected_installed_program",
     "ensure_lan_firewall_access",
     "ShellExecuteExW",
     "CoCreateInstance(&NetFwPolicy2"
 )) {
     if (-not $installerHelper.Contains($marker)) {
-        throw "Native installer helper is missing marker: $marker"
+        throw "Native Windows helper is missing marker: $marker"
     }
 }
 foreach ($marker in @(
@@ -147,15 +141,8 @@ if (-not $installerScript) {
 }
 
 $scriptContent = Get-Content -LiteralPath $installerScript.FullName -Raw -Encoding UTF8
-foreach ($marker in @(
-    "Page custom PageReinstall PageLeaveReinstall",
-    'nsis_tauri_utils::SemverCompare "${VERSION}"',
-    "NSIS_HOOK_PREINSTALL",
-    "installer-hooks.nsh"
-)) {
-    if (-not $scriptContent.Contains($marker)) {
-        throw "Generated NSIS script is missing upgrade marker: $marker"
-    }
+if (-not $scriptContent.Contains("installer-hooks.nsh")) {
+    throw "Generated NSIS script does not include the NearWeave installer hooks"
 }
 
 $binaryPath = Join-Path $projectRoot "src-tauri\target\release\nearweave.exe"
@@ -163,14 +150,11 @@ if (-not (Test-Path -LiteralPath $binaryPath -PathType Leaf)) {
     throw "Release executable was not found"
 }
 $versionInfo = (Get-Item -LiteralPath $binaryPath).VersionInfo
-if (-not $versionInfo.ProductVersion.StartsWith($versions[0], [StringComparison]::Ordinal)) {
-    throw "Executable product version does not match manifest version"
-}
-if (-not $versionInfo.FileVersion.StartsWith($versions[0], [StringComparison]::Ordinal)) {
-    throw "Executable file version does not match manifest version"
-}
-if ($versionInfo.ProductName -cne "NearWeave" -or $versionInfo.CompanyName -cne "railgun20001") {
-    throw "Executable ProductName or CompanyName metadata is incorrect"
+if (-not $versionInfo.ProductVersion.StartsWith($versions[0], [StringComparison]::Ordinal) -or
+    -not $versionInfo.FileVersion.StartsWith($versions[0], [StringComparison]::Ordinal) -or
+    $versionInfo.ProductName -cne "NearWeave" -or
+    $versionInfo.CompanyName -cne "railgun20001") {
+    throw "Executable product metadata is incorrect"
 }
 
 $bundleRoot = Join-Path $projectRoot "src-tauri\target\release\bundle\nsis"
@@ -184,7 +168,7 @@ if ($installerVersionInfo.ProductName -cne "NearWeave" -or
     $installerVersionInfo.CompanyName -cne "railgun20001" -or
     -not $installerVersionInfo.ProductVersion.StartsWith($versions[0], [StringComparison]::Ordinal) -or
     -not $installerVersionInfo.FileVersion.StartsWith($versions[0], [StringComparison]::Ordinal)) {
-    throw "Installer ProductName, CompanyName or version metadata is incorrect"
+    throw "Installer product metadata is incorrect"
 }
 $releaseWorkflow = Get-Content -LiteralPath (Join-Path $projectRoot ".github\workflows\release.yml") -Raw -Encoding UTF8
 if (-not $releaseWorkflow.Contains('releaseAssetNamePattern: "nearweave_[version]_[arch][setup][ext]"')) {
@@ -203,9 +187,9 @@ if ($authenticode.Status -ne "Valid") {
     if (-not $AllowUnsigned) {
         throw "Installer Authenticode signature is not valid: $($authenticode.Status)"
     }
-    Write-Warning "Unsigned v0.4.0 baseline validation enabled; Authenticode validation was skipped."
+    Write-Warning "Unsigned local validation enabled; Authenticode validation was skipped."
 } elseif ($authenticode.SignerCertificate.Subject -notmatch "SignPath Foundation") {
     throw "Unexpected Authenticode publisher: $($authenticode.SignerCertificate.Subject)"
 }
 
-Write-Output "NearWeave installer migration validation passed for version $($versions[0])."
+Write-Output "NearWeave installer validation passed for version $($versions[0])."

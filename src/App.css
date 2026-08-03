@@ -1268,15 +1268,6 @@ button.action-card:disabled {
   white-space: nowrap;
 }
 
-.legacy-receive-path {
-  justify-content: space-between;
-  color: #735d3f;
-}
-
-.legacy-receive-path .text-button {
-  flex: none;
-}
-
 .share-panel {
   display: grid;
   grid-template-rows: minmax(0, 1.3fr) minmax(150px, 0.7fr);

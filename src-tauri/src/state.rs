@@ -42,7 +42,6 @@ pub(crate) struct SharedState {
     pub device_id: Uuid,
     pub device_name: String,
     pub receive_directory: PathBuf,
-    pub legacy_receive_directory: Option<PathBuf>,
     pub settings_path: PathBuf,
     pub trust_path: PathBuf,
     pub identity: DeviceIdentity,
@@ -169,7 +168,6 @@ pub(crate) struct AppStateConfig {
     pub device_id: Uuid,
     pub device_name: String,
     pub receive_directory: PathBuf,
-    pub legacy_receive_directory: Option<PathBuf>,
     pub settings_path: PathBuf,
     pub trust_path: PathBuf,
     pub identity: DeviceIdentity,
@@ -187,7 +185,6 @@ impl AppState {
                 device_id: config.device_id,
                 device_name: config.device_name,
                 receive_directory: config.receive_directory,
-                legacy_receive_directory: config.legacy_receive_directory,
                 settings_path: config.settings_path,
                 trust_path: config.trust_path,
                 identity: config.identity,
@@ -355,11 +352,6 @@ impl AppState {
                 .lock()
                 .expect("局域网首次设置状态锁损坏"),
             receive_directory: self.inner.receive_directory.to_string_lossy().into_owned(),
-            legacy_receive_directory: self
-                .inner
-                .legacy_receive_directory
-                .as_ref()
-                .map(|path| path.to_string_lossy().into_owned()),
             devices: self.inner.devices.lock().expect("设备列表锁损坏").clone(),
             local_shares: self
                 .inner
@@ -2158,7 +2150,6 @@ mod tests {
             device_id: Uuid::nil(),
             device_name: "test".into(),
             receive_directory: PathBuf::from("received"),
-            legacy_receive_directory: None,
             settings_path: PathBuf::from("settings.json"),
             trust_path: PathBuf::from("trusted-devices.json"),
             identity: DeviceIdentity {

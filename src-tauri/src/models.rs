@@ -26,7 +26,6 @@ pub struct AppSnapshot {
     pub lan_enabled: bool,
     pub lan_setup_required: bool,
     pub receive_directory: String,
-    pub legacy_receive_directory: Option<String>,
     pub devices: Vec<NearbyDevice>,
     pub local_shares: Vec<LocalShareView>,
     pub remote_workspaces: Vec<RemoteWorkspaceView>,

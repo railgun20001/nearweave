@@ -2419,7 +2419,6 @@ dependencies = [
  "tokio",
  "uuid",
  "windows 0.62.2",
- "windows-registry",
 ]
 
 [[package]]

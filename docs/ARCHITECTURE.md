@@ -19,7 +19,7 @@
 - `files.rs`：执行文件分块、哈希、临时文件落盘、目录索引与路径边界检查。
 - `clipboard.rs`：在单独线程中访问系统剪贴板；Windows 通过 `WM_CLIPBOARDUPDATE` 事件唤醒，使用内容哈希抑制回环，不执行固定间隔轮询。
 - `settings.rs`：只持久化明确允许跨启动恢复的用户偏好；共享目录授权仍不落盘。
-- `installer_helper.rs`：Windows 原生 Rust GUI 辅助入口，执行白名单式安装迁移和防火墙规则操作；复用正式签名主程序，不创建终端进程。
+- `installer_helper.rs`：Windows 原生 Rust GUI 辅助入口，只执行固定的防火墙规则操作；复用正式签名主程序，不创建终端进程。
 
 ### 协议层
 

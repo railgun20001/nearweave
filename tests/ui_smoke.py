@@ -14,9 +14,6 @@ def main() -> None:
         page.get_by_text("NearWeave 连接运行中 · 1 台已连接").wait_for()
         page.get_by_title("当前发送目标").wait_for()
         page.get_by_role("button", name="取消传输：产品演示.mp4").wait_for()
-        page.get_by_text("旧版接收文件仍保留在原目录").wait_for()
-        page.get_by_role("button", name="打开原目录").wait_for()
-
         page.get_by_role("button", name="设计素材").click()
         page.get_by_text("文件夹 · 点击后加载").wait_for()
         page.get_by_role("button", name="打开文件夹").click()

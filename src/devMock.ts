@@ -50,7 +50,6 @@ export async function installDevelopmentMock() {
     lanEnabled: !showLanSetup,
     lanSetupRequired: showLanSetup,
     receiveDirectory: "C:\\Users\\Demo\\Downloads\\NearWeave Received",
-    legacyReceiveDirectory: "C:\\Users\\Demo\\Downloads\\旧版接收",
     devices: [
       {
         id: "00000000-0000-0000-0000-000000000002",

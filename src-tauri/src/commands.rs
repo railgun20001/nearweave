@@ -483,22 +483,6 @@ pub fn open_receive_directory(app: AppHandle, state: State<'_, AppState>) -> Com
         .map_err(|error| error.to_string())
 }
 
-#[tauri::command]
-pub fn open_legacy_receive_directory(
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> CommandResult<()> {
-    let directory = state
-        .inner
-        .legacy_receive_directory
-        .as_ref()
-        .filter(|path| path.is_dir())
-        .ok_or_else(|| "旧版接收目录已不存在".to_string())?;
-    app.opener()
-        .open_path(directory.to_string_lossy(), None::<String>)
-        .map_err(|error| error.to_string())
-}
-
 fn publish_share_roots_if_connected(state: AppState) {
     for device_id in state.connected_peer_ids() {
         if state.supports_capability(device_id, CAPABILITY_LAZY_DIRECTORY) {

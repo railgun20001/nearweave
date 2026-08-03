@@ -95,13 +95,13 @@ pnpm tauri build --no-sign
 $env:TAURI_SIGNING_PRIVATE_KEY="$env:USERPROFILE\.tauri\nearweave.key"
 $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD=Get-Content -LiteralPath "$env:USERPROFILE\.tauri\nearweave.key.password" -Raw
 pnpm tauri build
-.\scripts\verify-installer-upgrade.ps1
+.\scripts\verify-installer.ps1
 Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY,Env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 ```
 
 GitHub Actions 发布前，需要在仓库 Actions Secrets 中创建 `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 和 `GITEE_TOKEN`。前两个值分别为上述私钥文件和口令文件的完整内容；`GITEE_TOKEN` 只维护 `railgun20001/nearweave` 的代码与 Release，以及 `railgun20001/nearweave-updates` 的稳定更新清单。推送与应用版本一致的 `v<版本号>` 标签后，工作流会先发布 GitHub NSIS 安装包、签名和 `latest.json`，再把同一安装包与签名同步到 Gitee，并把改写为 Gitee 下载地址的清单发布到独立更新仓库。
 
-`.github/workflows/sync-gitee.yml` 也支持手动输入已有的 Release 标签进行补同步。Gitee 主仓库的 `main` 和标签不得直接提交；同步发现非快进分叉时会失败，不会静默覆盖 Gitee 独有提交。机器维护的 `nearweave-updates` 仓库只在 `main` 保存稳定的 `latest.json`，使重置前的主仓库 `updater` 地址保持失效。
+`.github/workflows/sync-gitee.yml` 也支持手动输入已有的 Release 标签进行补同步。Gitee 主仓库的 `main` 和标签不得直接提交；同步发现非快进分叉时会失败，不会静默覆盖 Gitee 独有提交。机器维护的 `nearweave-updates` 仓库只在 `main` 保存稳定的 `latest.json`。
 
 ## AI 开发说明
 
@@ -157,19 +157,17 @@ Tauri 2 可以承载 Windows、macOS、Linux、Android 和 iOS 界面，但各�
 
 因此，大文件和大目录的长期方向是保留蓝牙发现与近场信任，同时允许协商到局域网传输；RFCOMM 继续作为无网络环境下的基础通道。
 
-## 安装、升级与 v0.4.0 迁移
+## 安装与发布
 
 从 [Gitee Releases](https://gitee.com/railgun20001/nearweave/releases) 或 [GitHub Releases](https://github.com/railgun20001/nearweave/releases) 下载 `nearweave_0.4.0_x64-setup.exe`。Gitee 是首选更新源，GitHub 是备用源；两端的安装包与 `.sig` 字节一致。两个 `latest.json` 来自同一次构建并包含相同版本和安装包签名，但分别保留 Gitee、GitHub 下载 URL，才能在首选源故障时真正回退。
 
-v0.4.0 是品牌、工程标识和传输标识的硬切换：重置前版本与 NearWeave v0.4.0 不能相互发现或通信。旧 Gitee 更新地址不再保留，中国大陆旧版用户必须从新的 Releases 页面手动安装一次 v0.4.0；GitHub 仓库重命名产生的重定向不作为升级承诺。
+Windows 安装器只管理 NearWeave 当前产品目录、安装项、开始菜单项和桌面快捷方式，不检测、卸载或导入其他产品数据。防火墙操作复用已签名的 NearWeave 主程序作为原生 Rust GUI helper，不调用 PowerShell，也不会弹出终端窗口；规则只在用户从应用内明确启用局域网传输时创建。
 
-Windows 安装器只迁移经过严格校验的旧版当前用户安装：发布者、版本、安装路径、程序和卸载器必须全部匹配，旧程序仍运行、路径异常或卸载失败时都会中止。迁移完成后只保留一个 NearWeave 安装项、开始菜单项和桌面快捷方式，并恢复原有开机启动状态。安装迁移与防火墙操作均复用已签名的 NearWeave 主程序作为原生 Rust GUI helper，不调用 PowerShell，也不会弹出终端窗口；防火墙规则改为由用户在应用内明确启用。
-
-首次启动会从两个既有应用数据目录迁移到 `io.github.railgun20001.nearweave`。目标不存在时整体移动；目标已存在时只补充缺失内容，不覆盖新数据。`device-id`、`identity.bin`、`trusted-devices.json` 和 `settings.json` 会保留，因此双方都升级到 v0.4.0 后无需重新配对。旧接收目录和其中的用户文件不会移动或删除；主界面会显示“打开原目录”入口。新接收目录为 `Downloads\NearWeave Received`。
+应用数据保存在 `io.github.railgun20001.nearweave`，接收目录为 `Downloads\NearWeave Received`。安装器不会扫描或导入其他应用目录、身份、信任记录、设置和接收文件。
 
 v0.4.0 安装包具有 Tauri Updater 签名，但在 SignPath Foundation 申请获批前没有 Authenticode，SmartScreen 可能显示未知发布者。获批后的 v0.4.1 将分别签名主程序和安装包，再为最终安装包生成 Updater `.sig` 与 `latest.json`。详见 [SignPath 发布说明](docs/SIGNPATH.md)。
 
-Updater 私钥、公钥和口令沿用既有密钥材料。私钥或口令一旦丢失，已安装客户端将无法验证后续更新；维护者必须对 `$env:USERPROFILE\.tauri\nearweave.key` 和同目录的 `.key.password` 做离线备份，仓库只保存公开公钥。
+Updater 私钥、公钥和口令是正式更新链的长期密钥材料。私钥或口令一旦丢失，已安装客户端将无法验证后续更新；维护者必须对 `$env:USERPROFILE\.tauri\nearweave.key` 和同目录的 `.key.password` 做离线备份，仓库只保存公开公钥。
 
 ## 许可证
 

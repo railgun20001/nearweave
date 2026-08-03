@@ -261,8 +261,8 @@ mod tests {
     }
 
     #[test]
-    fn hello_without_network_offer_is_valid() {
-        let header = r#"{"kind":"hello","protocol_version":1,"device_id":"00000000-0000-0000-0000-000000000000","device_name":"旧版本","capabilities":["files"]}"#;
+    fn bluetooth_only_hello_without_network_offer_is_valid() {
+        let header = r#"{"kind":"hello","protocol_version":1,"device_id":"00000000-0000-0000-0000-000000000000","device_name":"测试设备","capabilities":["files"]}"#;
         let message: Message = serde_json::from_slice(header.as_bytes()).expect("Hello 应可解码");
 
         match message {
@@ -359,18 +359,6 @@ mod tests {
         .expect("编码应成功");
 
         assert_eq!(&encoded[..4], b"NWV1");
-    }
-
-    #[test]
-    fn previous_frame_magic_is_rejected() {
-        let mut encoded = Frame::new(Message::ShareRootsRequest {
-            request_id: Uuid::nil(),
-        })
-        .encode()
-        .expect("编码应成功");
-        encoded[..4].copy_from_slice(&[66, 66, 83, 49]);
-
-        assert!(Frame::decode(&encoded).is_err());
     }
 
     #[test]
