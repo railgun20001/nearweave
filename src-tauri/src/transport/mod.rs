@@ -132,7 +132,11 @@ pub async fn refresh_nearby_devices(app: &AppHandle, state: &AppState) -> AppRes
             state.emit_notice(
                 app,
                 NoticeLevel::Info,
-                format!("蓝牙设备刷新失败，局域网发现仍可使用：{error}"),
+                if state.lan_enabled() {
+                    format!("蓝牙设备刷新失败，局域网发现仍可使用：{error}")
+                } else {
+                    format!("蓝牙设备刷新失败：{error}")
+                },
             );
         }
     }
@@ -151,7 +155,8 @@ pub async fn set_receiver_enabled(app: AppHandle, state: AppState, enabled: bool
         }
         state.set_connection_service_state(ConnectionServiceState::Starting);
         state.emit_snapshot(&app);
-        if state.network_runtime().is_none()
+        if state.lan_enabled()
+            && state.network_runtime().is_none()
             && let Err(error) = start_network_transport(app.clone(), state.clone()).await
         {
             state.set_network_start_error(error.to_string());
@@ -168,13 +173,17 @@ pub async fn set_receiver_enabled(app: AppHandle, state: AppState, enabled: bool
                 state.emit_notice(
                     &app,
                     NoticeLevel::Info,
-                    format!("蓝牙接收服务未开启，纯局域网仍可使用：{error}"),
+                    if state.lan_enabled() {
+                        format!("蓝牙接收服务未开启，纯局域网仍可使用：{error}")
+                    } else {
+                        format!("蓝牙接收服务未开启，可在设置中启用局域网传输：{error}")
+                    },
                 );
             }
         }
         state.set_connection_service_state(ConnectionServiceState::Running);
         spawn_service_retry(app.clone(), state.clone());
-        if state.network_runtime().is_none()
+        if (!state.lan_enabled() || state.network_runtime().is_none())
             && state
                 .inner
                 .listener
@@ -185,7 +194,11 @@ pub async fn set_receiver_enabled(app: AppHandle, state: AppState, enabled: bool
             state.emit_notice(
                 &app,
                 NoticeLevel::Error,
-                "蓝牙和局域网接收服务均不可用，NearWeave 将继续后台重试",
+                if state.lan_enabled() {
+                    "蓝牙和局域网接收服务均不可用，NearWeave 将继续后台重试"
+                } else {
+                    "蓝牙接收服务不可用，NearWeave 将继续后台重试"
+                },
             );
         }
     } else {
@@ -244,6 +257,31 @@ pub async fn set_receiver_enabled(app: AppHandle, state: AppState, enabled: bool
     Ok(())
 }
 
+pub async fn enable_lan_transport(app: AppHandle, state: AppState) -> AppResult<()> {
+    let _transition = state.inner.service_transition.lock().await;
+    state.set_lan_enabled(true)?;
+    let mut start_error = None;
+    if state.receiver_enabled()
+        && state.network_runtime().is_none()
+        && let Err(error) = start_network_transport(app.clone(), state.clone()).await
+    {
+        let message = error.to_string();
+        state.set_network_start_error(message.clone());
+        start_error = Some(message);
+    }
+    state.emit_snapshot(&app);
+    if let Some(error) = start_error {
+        state.emit_notice(
+            &app,
+            NoticeLevel::Info,
+            format!("局域网权限已启用，服务暂时无法启动并将自动重试：{error}"),
+        );
+    } else {
+        state.emit_notice(&app, NoticeLevel::Success, "局域网传输已启用");
+    }
+    Ok(())
+}
+
 fn spawn_service_retry(app: AppHandle, state: AppState) {
     let token = state.begin_service_retry();
     tauri::async_runtime::spawn(async move {
@@ -271,40 +309,43 @@ fn spawn_service_retry(app: AppHandle, state: AppState) {
                 }
             }
 
-            let discovery_unavailable = state
-                .inner
-                .discovery_error
-                .lock()
-                .expect("局域网发现状态锁损坏")
-                .is_some();
-            if state.network_runtime().is_none() {
+            let discovery_unavailable = state.lan_enabled()
+                && state
+                    .inner
+                    .discovery_error
+                    .lock()
+                    .expect("局域网发现状态锁损坏")
+                    .is_some();
+            if state.lan_enabled() && state.network_runtime().is_none() {
                 match start_network_transport(app.clone(), state.clone()).await {
                     Ok(()) => {}
                     Err(error) => state.set_network_start_error(error.to_string()),
                 }
-            } else if discovery_unavailable {
+            } else if state.lan_enabled() && discovery_unavailable {
                 let _ = retry_network_discovery(app.clone(), state.clone()).await;
             }
             state.emit_snapshot(&app);
 
-            let has_component_error = state
+            let bluetooth_error = state
                 .inner
                 .bluetooth_error
                 .lock()
                 .expect("蓝牙服务状态锁损坏")
-                .is_some()
-                || state
+                .is_some();
+            let lan_error = state.lan_enabled()
+                && (state
                     .inner
                     .discovery_error
                     .lock()
                     .expect("局域网发现状态锁损坏")
                     .is_some()
-                || state
-                    .inner
-                    .tcp_error
-                    .lock()
-                    .expect("局域网接收状态锁损坏")
-                    .is_some();
+                    || state
+                        .inner
+                        .tcp_error
+                        .lock()
+                        .expect("局域网接收状态锁损坏")
+                        .is_some());
+            let has_component_error = bluetooth_error || lan_error;
             attempt = if has_component_error {
                 attempt.saturating_add(1)
             } else {
@@ -318,10 +359,15 @@ pub async fn connect_peer(app: AppHandle, state: AppState, device: NearbyDevice)
     let target = ReconnectTarget {
         device_id: device.device_id,
         display_name: device.name,
-        lan_endpoint: device
-            .lan_endpoint
-            .as_deref()
-            .and_then(|value| value.parse().ok()),
+        lan_endpoint: state
+            .lan_enabled()
+            .then(|| {
+                device
+                    .lan_endpoint
+                    .as_deref()
+                    .and_then(|value| value.parse().ok())
+            })
+            .flatten(),
         bluetooth_endpoint: device.bluetooth_endpoint,
     };
     connect_new_session(app, state, target).await
@@ -372,11 +418,15 @@ async fn connect_target(
         && let Some(device) = state.find_device(&device_id.to_string())
     {
         target.display_name = device.name;
-        target.lan_endpoint = device
-            .lan_endpoint
-            .as_deref()
-            .and_then(|value| value.parse().ok())
-            .or(target.lan_endpoint);
+        target.lan_endpoint = if state.lan_enabled() {
+            device
+                .lan_endpoint
+                .as_deref()
+                .and_then(|value| value.parse().ok())
+                .or(target.lan_endpoint)
+        } else {
+            None
+        };
         target.bluetooth_endpoint = device.bluetooth_endpoint.or(target.bluetooth_endpoint);
     }
 

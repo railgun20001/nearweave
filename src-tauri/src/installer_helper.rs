@@ -13,7 +13,7 @@ use windows::{
     Win32::{
         Foundation::{CloseHandle, RPC_E_CHANGED_MODE, VARIANT_FALSE, VARIANT_TRUE},
         NetworkManagement::WindowsFirewall::{
-            INetFwPolicy2, INetFwRule, NET_FW_ACTION_ALLOW, NET_FW_IP_PROTOCOL,
+            INetFwPolicy2, INetFwRule, INetFwRules, NET_FW_ACTION_ALLOW, NET_FW_IP_PROTOCOL,
             NET_FW_IP_PROTOCOL_TCP, NET_FW_IP_PROTOCOL_UDP, NET_FW_PROFILE2_ALL,
             NET_FW_RULE_DIR_IN, NetFwPolicy2, NetFwRule,
         },
@@ -29,11 +29,17 @@ use windows::{
             },
             Environment::ExpandEnvironmentStringsW,
             Threading::{
-                OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
-                QueryFullProcessImageNameW,
+                GetExitCodeProcess, INFINITE, OpenProcess, PROCESS_NAME_WIN32,
+                PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW, WaitForSingleObject,
             },
         },
-        UI::Shell::{IShellLinkW, SLGP_RAWPATH, ShellLink},
+        UI::{
+            Shell::{
+                IShellLinkW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, SLGP_RAWPATH,
+                ShellExecuteExW, ShellLink,
+            },
+            WindowsAndMessaging::SW_HIDE,
+        },
     },
     core::{BSTR, Interface, PCWSTR},
 };
@@ -96,6 +102,9 @@ pub fn run_from_args() -> Option<i32> {
             .and_then(|state_file| run_postinstall_migration(&state_file)),
         Some("firewall-add") if arguments.next().is_none() => configure_firewall(true),
         Some("firewall-remove") if arguments.next().is_none() => configure_firewall(false),
+        Some("firewall-present") if arguments.next().is_none() => firewall_rules_are_present()
+            .then_some(())
+            .ok_or_else(|| "未配置 NearWeave 局域网防火墙规则".into()),
         _ => Err("安装辅助参数无效".into()),
     };
 
@@ -311,6 +320,114 @@ fn configure_firewall(add: bool) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// 只读校验当前安装路径的两条防火墙规则，启动时调用不会触发 UAC。
+pub(crate) fn lan_firewall_is_configured() -> bool {
+    expected_installed_program()
+        .and_then(|program| firewall_rules_are_current(&program))
+        .unwrap_or(false)
+}
+
+fn firewall_rules_are_present() -> bool {
+    let Ok(_com) = ComApartment::initialize() else {
+        return false;
+    };
+    let Ok(policy): Result<INetFwPolicy2, _> =
+        (unsafe { CoCreateInstance(&NetFwPolicy2, None, CLSCTX_INPROC_SERVER) })
+    else {
+        return false;
+    };
+    let Ok(rules) = (unsafe { policy.Rules() }) else {
+        return false;
+    };
+    current_and_legacy_rule_names()
+        .iter()
+        .any(|name| unsafe { rules.Item(&BSTR::from(name)) }.is_ok())
+}
+
+/// 用户明确选择启用局域网时调用。规则缺失才通过 `runas` 启动同一份已签名 GUI
+/// 程序；辅助进程没有控制台，系统只显示 Windows UAC。
+pub(crate) fn ensure_lan_firewall_access() -> Result<(), String> {
+    if lan_firewall_is_configured() {
+        return Ok(());
+    }
+
+    let program = expected_installed_program()?;
+    let current = normalize_path(
+        &env::current_exe().map_err(|error| format!("无法读取 NearWeave 程序路径：{error}"))?,
+    )?;
+    if !paths_equal(&current, &program)? || !current.is_file() {
+        return Err("请先安装 NearWeave，再启用局域网传输".into());
+    }
+
+    let verb = wide_null(std::ffi::OsStr::new("runas"));
+    let program_wide = wide_null(program.as_os_str());
+    let parameters = wide_null(std::ffi::OsStr::new(
+        "--nearweave-installer-helper firewall-add",
+    ));
+    let mut execute = SHELLEXECUTEINFOW {
+        cbSize: u32::try_from(size_of::<SHELLEXECUTEINFOW>()).unwrap_or(u32::MAX),
+        fMask: SEE_MASK_NOCLOSEPROCESS,
+        lpVerb: PCWSTR(verb.as_ptr()),
+        lpFile: PCWSTR(program_wide.as_ptr()),
+        lpParameters: PCWSTR(parameters.as_ptr()),
+        nShow: SW_HIDE.0,
+        ..Default::default()
+    };
+    unsafe { ShellExecuteExW(&mut execute) }
+        .map_err(|_| "Windows 管理员授权已取消或无法启动".to_string())?;
+    if execute.hProcess.is_invalid() {
+        return Err("无法等待 Windows 防火墙授权进程".into());
+    }
+
+    let wait_result = unsafe { WaitForSingleObject(execute.hProcess, INFINITE) };
+    let mut exit_code = u32::MAX;
+    let exit_result = unsafe { GetExitCodeProcess(execute.hProcess, &mut exit_code) };
+    let _ = unsafe { CloseHandle(execute.hProcess) };
+    if wait_result != windows::Win32::Foundation::WAIT_OBJECT_0 || exit_result.is_err() {
+        return Err("等待 Windows 防火墙授权结果失败".into());
+    }
+    if exit_code != 0 {
+        return Err("未能写入 NearWeave 局域网防火墙规则".into());
+    }
+    if !lan_firewall_is_configured() {
+        return Err("Windows 未保留 NearWeave 局域网防火墙规则".into());
+    }
+    Ok(())
+}
+
+fn firewall_rules_are_current(program: &Path) -> Result<bool, String> {
+    let _com = ComApartment::initialize()?;
+    let policy: INetFwPolicy2 = unsafe {
+        CoCreateInstance(&NetFwPolicy2, None, CLSCTX_INPROC_SERVER)
+            .map_err(|error| format!("无法访问 Windows 防火墙策略：{error}"))?
+    };
+    let rules = unsafe { policy.Rules() }
+        .map_err(|error| format!("无法访问 Windows 防火墙规则：{error}"))?;
+    Ok(FIREWALL_RULES
+        .iter()
+        .all(|spec| firewall_rule_is_current(&rules, *spec, program)))
+}
+
+fn firewall_rule_is_current(rules: &INetFwRules, spec: FirewallRuleSpec, program: &Path) -> bool {
+    let Ok(rule) = (unsafe { rules.Item(&BSTR::from(spec.name)) }) else {
+        return false;
+    };
+    let Ok(application_name) = (unsafe { rule.ApplicationName() }) else {
+        return false;
+    };
+    paths_equal(Path::new(&application_name.to_string()), program).unwrap_or(false)
+        && unsafe { rule.Protocol() }.is_ok_and(|value| value == spec.protocol.0)
+        && unsafe { rule.LocalPorts() }
+            .is_ok_and(|value| value.to_string().eq_ignore_ascii_case(spec.local_ports))
+        && unsafe { rule.RemoteAddresses() }
+            .is_ok_and(|value| value.to_string().eq_ignore_ascii_case("LocalSubnet"))
+        && unsafe { rule.Direction() }.is_ok_and(|value| value == NET_FW_RULE_DIR_IN)
+        && unsafe { rule.Profiles() }.is_ok_and(|value| value == NET_FW_PROFILE2_ALL.0)
+        && unsafe { rule.EdgeTraversal() }.is_ok_and(|value| value == VARIANT_FALSE)
+        && unsafe { rule.Action() }.is_ok_and(|value| value == NET_FW_ACTION_ALLOW)
+        && unsafe { rule.Enabled() }.is_ok_and(|value| value == VARIANT_TRUE)
 }
 
 fn create_firewall_rule(spec: FirewallRuleSpec, program: &Path) -> Result<INetFwRule, String> {

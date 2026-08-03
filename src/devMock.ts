@@ -1,6 +1,7 @@
 export async function installDevelopmentMock() {
   const { mockIPC, mockWindows } = await import("@tauri-apps/api/mocks");
   mockWindows("main");
+  const showLanSetup = new URLSearchParams(window.location.search).has("lan-setup");
   const snapshot = {
     platform: "windows",
     deviceId: "00000000-0000-0000-0000-000000000001",
@@ -46,6 +47,8 @@ export async function installDevelopmentMock() {
     ],
     clipboardEnabled: true,
     autostartEnabled: false,
+    lanEnabled: !showLanSetup,
+    lanSetupRequired: showLanSetup,
     receiveDirectory: "C:\\Users\\Demo\\Downloads\\NearWeave Received",
     legacyReceiveDirectory: "C:\\Users\\Demo\\Downloads\\旧版接收",
     devices: [

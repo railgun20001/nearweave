@@ -23,6 +23,18 @@ def main() -> None:
         page.get_by_text("NearWeave 图标.sketch").wait_for()
         page.get_by_title("下载文件").wait_for()
 
+        page.get_by_role("button", name="打开设置").click()
+        page.get_by_text("局域网传输", exact=True).wait_for()
+        page.get_by_text("已启用", exact=True).wait_for()
+        page.get_by_role("button", name="关闭设置").click()
+
+        setup_page = browser.new_page(viewport={"width": 1180, "height": 760})
+        setup_page.goto("http://127.0.0.1:1420/?mock&lan-setup")
+        setup_page.wait_for_load_state("networkidle")
+        setup_page.get_by_role("dialog", name="启用局域网传输？").wait_for()
+        setup_page.get_by_role("button", name="暂不开启").wait_for()
+        setup_page.get_by_role("button", name="启用局域网传输").wait_for()
+
         assert not errors, f"浏览器控制台出现错误：{errors}"
         browser.close()
 

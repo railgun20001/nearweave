@@ -1144,6 +1144,8 @@ mod tests {
             trusted_devices: Vec::new(),
             clipboard_enabled: false,
             autostart_enabled: false,
+            lan_enabled: false,
+            lan_setup_decided: true,
         });
         let share_id = Uuid::new_v4();
         state
@@ -1182,6 +1184,8 @@ mod tests {
             trusted_devices: Vec::new(),
             clipboard_enabled: false,
             autostart_enabled: false,
+            lan_enabled: false,
+            lan_setup_decided: true,
         });
         let share_id = Uuid::new_v4();
         state
@@ -1221,6 +1225,8 @@ mod tests {
             trusted_devices: Vec::new(),
             clipboard_enabled: false,
             autostart_enabled: false,
+            lan_enabled: false,
+            lan_setup_decided: true,
         });
 
         tauri::async_runtime::block_on(async {

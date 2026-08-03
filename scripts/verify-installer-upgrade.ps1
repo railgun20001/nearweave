@@ -87,8 +87,8 @@ foreach ($marker in @(
     "nearweave-installer-helper.exe",
     "--nearweave-installer-helper migrate-pre",
     "--nearweave-installer-helper migrate-post",
+    "--nearweave-installer-helper firewall-present",
     '--nearweave-installer-helper firewall-${ACTION}',
-    'NEARWEAVE_RUN_FIREWALL "add"',
     'NEARWEAVE_RUN_FIREWALL "remove"'
 )) {
     if (-not $installerHooks.Contains($marker)) {
@@ -105,6 +105,8 @@ foreach ($marker in @(
     "legacy_version_is_supported",
     "restore_autostart",
     "expected_installed_program",
+    "ensure_lan_firewall_access",
+    "ShellExecuteExW",
     "CoCreateInstance(&NetFwPolicy2"
 )) {
     if (-not $installerHelper.Contains($marker)) {
@@ -121,6 +123,9 @@ foreach ($marker in @(
 }
 if ($installerHooks.Contains("powershell.exe") -or $installerHooks.Contains(".ps1")) {
     throw "Installer hooks must not launch PowerShell scripts"
+}
+if ($installerHooks.Contains('NEARWEAVE_RUN_FIREWALL "add"')) {
+    throw "Installer must not request firewall access during installation"
 }
 
 $tokens = $null

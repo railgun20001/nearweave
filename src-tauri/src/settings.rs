@@ -8,12 +8,16 @@ use crate::error::AppResult;
 #[serde(default, rename_all = "camelCase")]
 pub struct UserSettings {
     pub clipboard_enabled: bool,
+    pub lan_enabled: bool,
+    pub lan_setup_decided: bool,
 }
 
 impl Default for UserSettings {
     fn default() -> Self {
         Self {
             clipboard_enabled: true,
+            lan_enabled: false,
+            lan_setup_decided: false,
         }
     }
 }
@@ -40,11 +44,15 @@ mod tests {
         let path = temporary.path().join("settings.json");
         let expected = UserSettings {
             clipboard_enabled: false,
+            lan_enabled: true,
+            lan_setup_decided: true,
         };
 
         save(&path, &expected).expect("设置应写入");
 
         assert!(!load(&path).clipboard_enabled);
+        assert!(load(&path).lan_enabled);
+        assert!(load(&path).lan_setup_decided);
     }
 
     #[test]
@@ -53,6 +61,8 @@ mod tests {
         let path = temporary.path().join("settings.json");
 
         assert!(load(&path).clipboard_enabled);
+        assert!(!load(&path).lan_enabled);
+        assert!(!load(&path).lan_setup_decided);
     }
 
     #[test]
@@ -62,6 +72,8 @@ mod tests {
         fs::write(&path, b"not-json").expect("应写入损坏配置");
 
         assert!(load(&path).clipboard_enabled);
+        assert!(!load(&path).lan_enabled);
+        assert!(!load(&path).lan_setup_decided);
     }
 
     #[test]
@@ -75,5 +87,7 @@ mod tests {
         .expect("应写入旧版设置");
 
         assert!(!load(&path).clipboard_enabled);
+        assert!(!load(&path).lan_enabled);
+        assert!(!load(&path).lan_setup_decided);
     }
 }

@@ -170,6 +170,8 @@ interface AppSnapshot {
   trustedDevices: TrustedDevice[];
   clipboardEnabled: boolean;
   autostartEnabled: boolean;
+  lanEnabled: boolean;
+  lanSetupRequired: boolean;
   receiveDirectory: string;
   legacyReceiveDirectory: string | null;
   devices: NearbyDevice[];
@@ -234,6 +236,8 @@ const initialSnapshot: AppSnapshot = {
   trustedDevices: [],
   clipboardEnabled: true,
   autostartEnabled: false,
+  lanEnabled: false,
+  lanSetupRequired: true,
   receiveDirectory: "",
   legacyReceiveDirectory: null,
   devices: [],
@@ -740,7 +744,9 @@ function App() {
               </strong>
               <span>
                 {serviceRunning
-                  ? "局域网、热点与已配对蓝牙均可连接，最多同时连接 8 台设备"
+                  ? snapshot.lanEnabled
+                    ? "局域网、热点与已配对蓝牙均可连接，最多同时连接 8 台设备"
+                    : "已配对蓝牙可连接；局域网传输可在设置中单独启用"
                   : "恢复后才允许发现、连接和传输；不会自动重连之前设备"}
               </span>
             </div>
@@ -824,17 +830,22 @@ function App() {
             }}
           >
             <Wifi size={14} />
-            <input
-              aria-label="对方 IP 或 IP 端口"
-              placeholder="输入 IP 或 IP:端口"
+              <input
+                aria-label="对方 IP 或 IP 端口"
+                placeholder={
+                  snapshot.lanEnabled
+                    ? "输入 IP 或 IP:端口"
+                    : "请先在设置中启用局域网"
+                }
               value={manualEndpoint}
-              disabled={!serviceRunning}
+              disabled={!serviceRunning || !snapshot.lanEnabled}
               onChange={(event) => setManualEndpoint(event.target.value)}
             />
             <button
               type="submit"
               disabled={
                 !serviceRunning ||
+                !snapshot.lanEnabled ||
                 busy === "manual-connect"
               }
             >
@@ -1483,11 +1494,42 @@ function App() {
                 </button>
               </article>
 
+              <article className="setting-row lan-setting">
+                <div>
+                  <strong>局域网传输</strong>
+                  <span>
+                    开启附近设备发现和高速传输；只有点击启用时才可能显示 Windows UAC
+                  </span>
+                </div>
+                {snapshot.lanEnabled ? (
+                  <span className="lan-setting-status">
+                    <ShieldCheck size={14} />
+                    已启用
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="lan-enable-button"
+                    disabled={busy === "lan-setup"}
+                    onClick={() =>
+                      execute("lan-setup", () => invoke("enable_lan"))
+                    }
+                  >
+                    {busy === "lan-setup" && (
+                      <LoaderCircle size={14} className="spin" />
+                    )}
+                    启用
+                  </button>
+                )}
+              </article>
+
               <article className="setting-row link-policy">
                 <div>
                   <strong>传输链路</strong>
                   <span>
-                    自动优先使用加密局域网，断开时立即回退到蓝牙
+                    {snapshot.lanEnabled
+                      ? "自动优先使用加密局域网，断开时立即回退到蓝牙"
+                      : "当前仅使用蓝牙；启用局域网后自动优先高速链路"}
                   </span>
                 </div>
                 <span
@@ -1625,6 +1667,55 @@ function App() {
             <footer>
               <span>设置保存在当前 Windows 用户下。</span>
             </footer>
+          </section>
+        </div>
+      )}
+
+      {busy !== "startup" && snapshot.lanSetupRequired && (
+        <div className="lan-setup-backdrop">
+          <section
+            className="lan-setup-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lan-setup-title"
+          >
+            <span className="lan-setup-icon">
+              <Wifi size={24} />
+            </span>
+            <div>
+              <span className="eyebrow">首次启动设置</span>
+              <h2 id="lan-setup-title">启用局域网传输？</h2>
+              <p>
+                启用后可发现同一局域网或热点中的设备，并使用加密高速链路。Windows
+                需要一次管理员授权来添加仅限本地子网的防火墙规则。
+              </p>
+              <p>暂不开启仍可使用已配对蓝牙，之后可随时前往设置启用。</p>
+            </div>
+            <div className="lan-setup-actions">
+              <button
+                type="button"
+                className="lan-setup-dismiss"
+                disabled={busy === "lan-setup"}
+                onClick={() =>
+                  execute("lan-setup", () => invoke("dismiss_lan_setup"))
+                }
+              >
+                暂不开启
+              </button>
+              <button
+                type="button"
+                className="lan-setup-enable"
+                disabled={busy === "lan-setup"}
+                onClick={() =>
+                  execute("lan-setup", () => invoke("enable_lan"))
+                }
+              >
+                {busy === "lan-setup" && (
+                  <LoaderCircle size={14} className="spin" />
+                )}
+                启用局域网传输
+              </button>
+            </div>
           </section>
         </div>
       )}

@@ -23,6 +23,8 @@ pub struct AppSnapshot {
     pub trusted_devices: Vec<TrustedDeviceView>,
     pub clipboard_enabled: bool,
     pub autostart_enabled: bool,
+    pub lan_enabled: bool,
+    pub lan_setup_required: bool,
     pub receive_directory: String,
     pub legacy_receive_directory: Option<String>,
     pub devices: Vec<NearbyDevice>,

@@ -65,6 +65,8 @@ pub(crate) struct SharedState {
     pub reconnects: Mutex<HashMap<Uuid, ReconnectPlan>>,
     pub clipboard_enabled: Mutex<bool>,
     pub autostart_enabled: Mutex<bool>,
+    pub lan_enabled: Mutex<bool>,
+    pub lan_setup_decided: Mutex<bool>,
     pub devices: Mutex<Vec<NearbyDevice>>,
     pub lan_last_seen: Mutex<HashMap<Uuid, Instant>>,
     pub trusted_devices: Mutex<Vec<TrustedDevice>>,
@@ -174,6 +176,8 @@ pub(crate) struct AppStateConfig {
     pub trusted_devices: Vec<TrustedDevice>,
     pub clipboard_enabled: bool,
     pub autostart_enabled: bool,
+    pub lan_enabled: bool,
+    pub lan_setup_decided: bool,
 }
 
 impl AppState {
@@ -206,6 +210,8 @@ impl AppState {
                 reconnects: Mutex::new(HashMap::new()),
                 clipboard_enabled: Mutex::new(config.clipboard_enabled),
                 autostart_enabled: Mutex::new(config.autostart_enabled),
+                lan_enabled: Mutex::new(config.lan_enabled),
+                lan_setup_decided: Mutex::new(config.lan_setup_decided),
                 devices: Mutex::new(Vec::new()),
                 lan_last_seen: Mutex::new(HashMap::new()),
                 trusted_devices: Mutex::new(config.trusted_devices),
@@ -342,6 +348,12 @@ impl AppState {
                 .autostart_enabled
                 .lock()
                 .expect("开机自启状态锁损坏"),
+            lan_enabled: self.lan_enabled(),
+            lan_setup_required: !*self
+                .inner
+                .lan_setup_decided
+                .lock()
+                .expect("局域网首次设置状态锁损坏"),
             receive_directory: self.inner.receive_directory.to_string_lossy().into_owned(),
             legacy_receive_directory: self
                 .inner
@@ -389,8 +401,8 @@ impl AppState {
             .expect("局域网接收状态锁损坏")
             .clone();
         let tcp_port = *self.inner.tcp_port.lock().expect("TCP 端口状态锁损坏");
-        let component = |available: bool, error: &Option<String>| {
-            if !listening {
+        let component = |enabled: bool, available: bool, error: &Option<String>| {
+            if !listening || !enabled {
                 ServiceStatus::Off
             } else if error.is_some() || !available {
                 ServiceStatus::Error
@@ -400,6 +412,7 @@ impl AppState {
         };
         ListenerStatus {
             bluetooth: component(
+                true,
                 self.inner
                     .listener
                     .lock()
@@ -408,11 +421,12 @@ impl AppState {
                 &bluetooth_error,
             ),
             discovery: component(
+                self.lan_enabled(),
                 self.network_runtime()
                     .is_some_and(|runtime| runtime.discovery_available()),
                 &discovery_error,
             ),
-            tcp: component(tcp_port.is_some(), &tcp_error),
+            tcp: component(self.lan_enabled(), tcp_port.is_some(), &tcp_error),
             bluetooth_error,
             discovery_error,
             tcp_error,
@@ -1368,6 +1382,29 @@ impl AppState {
         self.save_settings()
     }
 
+    pub fn lan_enabled(&self) -> bool {
+        *self.inner.lan_enabled.lock().expect("局域网启用状态锁损坏")
+    }
+
+    pub fn set_lan_enabled(&self, enabled: bool) -> AppResult<()> {
+        *self.inner.lan_enabled.lock().expect("局域网启用状态锁损坏") = enabled;
+        *self
+            .inner
+            .lan_setup_decided
+            .lock()
+            .expect("局域网首次设置状态锁损坏") = true;
+        self.save_settings()
+    }
+
+    pub fn dismiss_lan_setup(&self) -> AppResult<()> {
+        *self
+            .inner
+            .lan_setup_decided
+            .lock()
+            .expect("局域网首次设置状态锁损坏") = true;
+        self.save_settings()
+    }
+
     pub fn receiver_enabled(&self) -> bool {
         *self.inner.listening.lock().expect("监听状态锁损坏")
     }
@@ -1381,6 +1418,12 @@ impl AppState {
                     .clipboard_enabled
                     .lock()
                     .expect("剪贴板状态锁损坏"),
+                lan_enabled: self.lan_enabled(),
+                lan_setup_decided: *self
+                    .inner
+                    .lan_setup_decided
+                    .lock()
+                    .expect("局域网首次设置状态锁损坏"),
             },
         )
     }
@@ -2125,6 +2168,8 @@ mod tests {
             trusted_devices: Vec::new(),
             clipboard_enabled: false,
             autostart_enabled: false,
+            lan_enabled: false,
+            lan_setup_decided: true,
         })
     }
 

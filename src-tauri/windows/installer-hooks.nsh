@@ -22,8 +22,12 @@ nearweave_postinstall_ok:
 !macroend
 
 !macro NEARWEAVE_RUN_FIREWALL ACTION
-  DetailPrint "正在更新 NearWeave 局域网防火墙规则..."
+  DetailPrint "正在检查 NearWeave 局域网防火墙规则..."
+  ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --nearweave-installer-helper firewall-present' $0
+  IntCmp $0 0 nearweave_firewall_cleanup nearweave_firewall_done nearweave_firewall_done
+nearweave_firewall_cleanup:
   ExecShellWait "runas" "$INSTDIR\${MAINBINARYNAME}.exe" '--nearweave-installer-helper firewall-${ACTION}' SW_HIDE
+nearweave_firewall_done:
   SetOutPath "$INSTDIR"
 !macroend
 
@@ -32,7 +36,6 @@ nearweave_postinstall_ok:
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
-  !insertmacro NEARWEAVE_RUN_FIREWALL "add"
   !insertmacro NEARWEAVE_RUN_POSTINSTALL_MIGRATION
 !macroend
 

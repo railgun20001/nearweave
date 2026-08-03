@@ -59,6 +59,11 @@ pub fn run() {
             };
             #[cfg(not(target_os = "windows"))]
             let autostart_enabled = false;
+            #[cfg(target_os = "windows")]
+            let lan_enabled =
+                settings.lan_enabled && installer_helper::lan_firewall_is_configured();
+            #[cfg(not(target_os = "windows"))]
+            let lan_enabled = false;
             let state = AppState::new(AppStateConfig {
                 device_id,
                 device_name,
@@ -70,6 +75,8 @@ pub fn run() {
                 trusted_devices,
                 clipboard_enabled: settings.clipboard_enabled,
                 autostart_enabled,
+                lan_enabled,
+                lan_setup_decided: settings.lan_setup_decided,
             });
             app.manage(state.clone());
             if let Err(error) = tauri::async_runtime::block_on(transport::set_receiver_enabled(
@@ -107,6 +114,8 @@ pub fn run() {
             commands::cancel_transfer,
             commands::set_clipboard_enabled,
             commands::set_autostart_enabled,
+            commands::enable_lan,
+            commands::dismiss_lan_setup,
             commands::remove_transfer,
             commands::clear_transfer_history,
             commands::open_receive_directory,

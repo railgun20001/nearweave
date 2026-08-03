@@ -44,6 +44,34 @@ pub async fn set_connection_service_enabled(
 }
 
 #[tauri::command]
+pub async fn enable_lan(app: AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
+    #[cfg(target_os = "windows")]
+    {
+        tauri::async_runtime::spawn_blocking(crate::installer_helper::ensure_lan_firewall_access)
+            .await
+            .map_err(|error| format!("等待 Windows 管理员授权失败：{error}"))??;
+        transport::enable_lan_transport(app, state.inner().clone())
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (app, state);
+        Err("当前平台暂不支持自动配置局域网防火墙".into())
+    }
+}
+
+#[tauri::command]
+pub fn dismiss_lan_setup(app: AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
+    state
+        .dismiss_lan_setup()
+        .map_err(|error| format!("保存局域网设置失败：{error}"))?;
+    state.emit_snapshot(&app);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn connect_peer(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -58,8 +86,12 @@ pub async fn connect_peer(
         .find(|value| value.id == device_id)
         .cloned()
         .ok_or_else(|| "目标设备不在本次扫描结果中，请重新扫描".to_string())?;
-    if device.lan_endpoint.is_none() && !device.nearweave_enabled {
-        return Err("对方当前没有可用的局域网或 NearWeave 蓝牙连接".into());
+    let lan_available = state.lan_enabled() && device.lan_endpoint.is_some();
+    if !lan_available && !device.nearweave_enabled {
+        return Err(
+            "对方当前没有可用的 NearWeave 蓝牙连接；如需局域网直连，请先在设置中启用局域网传输"
+                .into(),
+        );
     }
     transport::connect_peer(app, state.inner().clone(), device)
         .await
@@ -72,6 +104,9 @@ pub async fn connect_by_ip(
     state: State<'_, AppState>,
     endpoint: String,
 ) -> CommandResult<()> {
+    if !state.lan_enabled() {
+        return Err("请先在设置中启用局域网传输".into());
+    }
     transport::connect_by_ip(app, state.inner().clone(), endpoint)
         .await
         .map_err(|error| error.to_string())

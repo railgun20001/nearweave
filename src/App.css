@@ -1520,7 +1520,8 @@ button.action-card:disabled {
   animation: backdrop-in 150ms ease-out;
 }
 
-.pairing-backdrop {
+.pairing-backdrop,
+.lan-setup-backdrop {
   position: fixed;
   inset: 0;
   z-index: 40;
@@ -1529,6 +1530,82 @@ button.action-card:disabled {
   padding: 24px;
   background: rgb(10 22 28 / 62%);
   backdrop-filter: blur(3px);
+}
+
+.lan-setup-backdrop {
+  z-index: 45;
+}
+
+.lan-setup-dialog {
+  width: min(460px, calc(100vw - 40px));
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid #b9dcda;
+  border-radius: 12px;
+  background: #f8fbfb;
+  box-shadow: 0 24px 70px rgb(5 18 24 / 34%);
+  animation: toast-in 180ms ease-out;
+}
+
+.lan-setup-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  color: #167b76;
+  border: 1px solid #b9dcda;
+  border-radius: 10px;
+  background: #eaf7f6;
+}
+
+.lan-setup-dialog h2 {
+  margin: 3px 0 0;
+  font-size: 21px;
+}
+
+.lan-setup-dialog p {
+  margin: 7px 0 0;
+  color: #687c84;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.lan-setup-actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 9px;
+}
+
+.lan-setup-actions button {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  border-radius: 7px;
+  font-size: 10px;
+}
+
+.lan-setup-dismiss {
+  color: #596f77;
+  border: 1px solid #cad7da;
+  background: #fff;
+}
+
+.lan-setup-enable {
+  color: #fff;
+  border: 1px solid #167b76;
+  background: #167b76;
+}
+
+.lan-setup-actions button:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .pairing-dialog {
@@ -1678,6 +1755,43 @@ button.action-card:disabled {
 
 .setting-row.link-policy {
   background: #f4f8ff;
+}
+
+.setting-row.lan-setting {
+  background: #f1faf8;
+}
+
+.lan-setting-status,
+.lan-enable-button {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 7px;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lan-setting-status {
+  padding: 0 10px;
+  color: #167b76 !important;
+  border: 1px solid #b9dcda;
+  background: #eaf7f6;
+}
+
+.lan-enable-button {
+  padding: 0 13px;
+  cursor: pointer;
+  color: #fff;
+  border: 1px solid #167b76;
+  background: #167b76;
+}
+
+.lan-enable-button:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .setting-row.updater-setting {

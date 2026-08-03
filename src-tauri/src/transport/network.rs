@@ -158,6 +158,9 @@ struct EstablishedLan {
 }
 
 pub async fn start_network_transport(app: AppHandle, state: AppState) -> AppResult<()> {
+    if !state.lan_enabled() {
+        return Err(AppError::InvalidInput("请先在设置中启用局域网传输".into()));
+    }
     let listener = bind_tcp_listener().await?;
     let tcp_port = listener.local_addr()?.port();
     let (discovery_socket, discovery_error) = bind_discovery_socket().await;
@@ -291,6 +294,10 @@ pub fn negotiate_network(
     peer_device_id: Uuid,
     offer: NetworkOffer,
 ) -> AppResult<()> {
+    if !state.lan_enabled() {
+        // 对端可以独立启用局域网；本机未授权时忽略协商，保留现有蓝牙连接。
+        return Ok(());
+    }
     if state.connection_kind(bluetooth_generation) != Some(ConnectionKind::Bluetooth) {
         return Ok(());
     }
@@ -305,6 +312,9 @@ pub async fn connect_lan_target(
     target: ReconnectTarget,
     reconnect_session: Uuid,
 ) -> AppResult<()> {
+    if !state.lan_enabled() {
+        return Err(AppError::InvalidInput("请先在设置中启用局域网传输".into()));
+    }
     let endpoint = resolve_target_endpoint(&state, &target)
         .ok_or_else(|| AppError::InvalidInput("设备当前没有可用的局域网地址".into()))?;
     if !state.is_reconnect_session_active(reconnect_session) {
@@ -328,6 +338,9 @@ pub async fn connect_lan_target(
 }
 
 pub async fn resolve_manual_target(state: &AppState, input: &str) -> AppResult<ReconnectTarget> {
+    if !state.lan_enabled() {
+        return Err(AppError::InvalidInput("请先在设置中启用局域网传输".into()));
+    }
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return Err(AppError::InvalidInput("请输入 IP 地址或 IP:端口".into()));
