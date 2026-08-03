@@ -4,6 +4,8 @@ mod error;
 mod files;
 mod handlers;
 mod identity;
+#[cfg(target_os = "windows")]
+mod installer_helper;
 mod models;
 mod protocol;
 mod settings;
@@ -18,6 +20,11 @@ use std::{
 use state::{AppState, AppStateConfig, ClipboardCommand};
 use tauri::Manager;
 use uuid::Uuid;
+
+#[cfg(target_os = "windows")]
+pub fn run_installer_helper_from_args() -> Option<i32> {
+    installer_helper::run_from_args()
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

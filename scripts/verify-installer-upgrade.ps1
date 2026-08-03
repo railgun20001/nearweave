@@ -75,23 +75,21 @@ if ($tauriConfig.bundle.windows.nsis.installerHooks -cne $expectedInstallerHooks
     throw "NSIS must load the NearWeave installer hooks"
 }
 $installerHooksPath = Join-Path $projectRoot "src-tauri\windows\installer-hooks.nsh"
-$firewallScriptPath = Join-Path $projectRoot "src-tauri\windows\configure-firewall.ps1"
-$migrationScriptPath = Join-Path $projectRoot "src-tauri\windows\migrate-legacy-install.ps1"
+$installerHelperPath = Join-Path $projectRoot "src-tauri\src\installer_helper.rs"
+$mainSourcePath = Join-Path $projectRoot "src-tauri\src\main.rs"
 $installerHooks = Get-Content -LiteralPath $installerHooksPath -Raw -Encoding UTF8
-$firewallScript = Get-Content -LiteralPath $firewallScriptPath -Raw -Encoding UTF8
-$migrationScript = Get-Content -LiteralPath $migrationScriptPath -Raw -Encoding UTF8
-foreach ($windowsPowerShellScriptPath in @($firewallScriptPath, $migrationScriptPath)) {
-    $windowsPowerShellScriptBytes = [IO.File]::ReadAllBytes($windowsPowerShellScriptPath)
-    if (@($windowsPowerShellScriptBytes | Where-Object { $_ -gt 0x7F }).Count -ne 0) {
-        throw "Installer PowerShell scripts must remain ASCII-only for Windows PowerShell 5.1: $windowsPowerShellScriptPath"
-    }
-}
+$installerHelper = Get-Content -LiteralPath $installerHelperPath -Raw -Encoding UTF8
+$mainSource = Get-Content -LiteralPath $mainSourcePath -Raw -Encoding UTF8
 foreach ($marker in @(
     "NSIS_HOOK_PREINSTALL",
     "NSIS_HOOK_POSTINSTALL",
     "NSIS_HOOK_PREUNINSTALL",
-    "nearweave-migrate-install.ps1",
-    "nearweave-configure-firewall.ps1"
+    "nearweave-installer-helper.exe",
+    "--nearweave-installer-helper migrate-pre",
+    "--nearweave-installer-helper migrate-post",
+    '--nearweave-installer-helper firewall-${ACTION}',
+    'NEARWEAVE_RUN_FIREWALL "add"',
+    'NEARWEAVE_RUN_FIREWALL "remove"'
 )) {
     if (-not $installerHooks.Contains($marker)) {
         throw "Installer hook is missing marker: $marker"
@@ -100,35 +98,40 @@ foreach ($marker in @(
 foreach ($marker in @(
     "UDP 37991",
     "Dynamic TCP",
-    "-Profile Any",
-    "-RemoteAddress LocalSubnet4",
-    "-EdgeTraversalPolicy Block",
-    "-Program"
+    "NET_FW_PROFILE2_ALL",
+    'BSTR::from("LocalSubnet")',
+    "SetEdgeTraversal(VARIANT_FALSE)",
+    "SetApplicationName",
+    "legacy_version_is_supported",
+    "restore_autostart",
+    "expected_installed_program",
+    "CoCreateInstance(&NetFwPolicy2"
 )) {
-    if (-not $firewallScript.Contains($marker)) {
-        throw "Firewall configuration is missing marker: $marker"
+    if (-not $installerHelper.Contains($marker)) {
+        throw "Native installer helper is missing marker: $marker"
     }
 }
 foreach ($marker in @(
-    'Publisher -cne $publisher',
-    'InstallLocation',
-    'UninstallString',
-    'Start-Process -FilePath $expectedOldUninstaller',
-    'restoreAutostart',
-    'NearWeave\nearweave.exe'
+    'windows_subsystem = "windows"',
+    "run_installer_helper_from_args"
 )) {
-    if (-not $migrationScript.Contains($marker)) {
-        throw "Install migration is missing marker: $marker"
+    if (-not $mainSource.Contains($marker)) {
+        throw "Windows GUI helper entry point is missing marker: $marker"
     }
 }
+if ($installerHooks.Contains("powershell.exe") -or $installerHooks.Contains(".ps1")) {
+    throw "Installer hooks must not launch PowerShell scripts"
+}
 
-foreach ($scriptPath in @($firewallScriptPath, $migrationScriptPath, $MyInvocation.MyCommand.Path)) {
-    $tokens = $null
-    $errors = $null
-    [Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$tokens, [ref]$errors) | Out-Null
-    if ($errors.Count -gt 0) {
-        throw "PowerShell syntax error in $scriptPath`: $($errors[0].Message)"
-    }
+$tokens = $null
+$errors = $null
+[Management.Automation.Language.Parser]::ParseFile(
+    $MyInvocation.MyCommand.Path,
+    [ref]$tokens,
+    [ref]$errors
+) | Out-Null
+if ($errors.Count -gt 0) {
+    throw "PowerShell syntax error in $($MyInvocation.MyCommand.Path)`: $($errors[0].Message)"
 }
 
 $generatedRoot = Join-Path $projectRoot "src-tauri\target\release\nsis"
@@ -142,7 +145,8 @@ $scriptContent = Get-Content -LiteralPath $installerScript.FullName -Raw -Encodi
 foreach ($marker in @(
     "Page custom PageReinstall PageLeaveReinstall",
     'nsis_tauri_utils::SemverCompare "${VERSION}"',
-    "NSIS_HOOK_PREINSTALL"
+    "NSIS_HOOK_PREINSTALL",
+    "installer-hooks.nsh"
 )) {
     if (-not $scriptContent.Contains($marker)) {
         throw "Generated NSIS script is missing upgrade marker: $marker"
