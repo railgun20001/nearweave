@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-NearWeave v0.4.0 是 SignPath Foundation 申请所需的公开、可下载基线。该版本使用既有 Tauri Updater 密钥签名更新包，但在申请获批前不包含 Windows Authenticode。Release 必须明确标注申请仍在审核中。
+NearWeave v0.4.0 是 SignPath Foundation 申请所需的公开、可下载基线。后续版本继续使用既有 Tauri Updater 密钥签名更新包，但在申请获批前不包含 Windows Authenticode。Release 必须明确标注申请仍在审核中。
 
 项目使用 Apache-2.0，公开提供隐私政策、卸载能力、系统修改提示和 [Code signing policy](../CODE_SIGNING_POLICY.md)。维护者 `railgun20001` 同时承担 Author / Committer、Reviewer 与 Approver 角色，并为 GitHub 和 SignPath 启用多因素身份验证。
 
@@ -19,7 +19,7 @@ NearWeave v0.4.0 是 SignPath Foundation 申请所需的公开、可下载基线
 
 申请表的联系人、2FA 与协议授权沿用维护者已经确认的信息。验证码必须由维护者本人完成；在验证码完成前不得声称申请已提交或获批。
 
-## 获批后的 v0.4.1 流水线
+## 获批后的双重签名流水线
 
 `.github/workflows/release-signpath.yml` 只接受与清单版本一致的已存在标签，并要求配置 `SIGNPATH_API_TOKEN` 以及 SignPath 组织、项目、策略和两个 Artifact Configuration slug：
 

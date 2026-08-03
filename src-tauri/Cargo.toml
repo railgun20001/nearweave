@@ -1,6 +1,6 @@
 [package]
 name = "nearweave"
-version = "0.4.0"
+version = "0.4.1"
 description = "通过局域网或蓝牙在附近设备间共享文件、目录与剪贴板"
 authors = ["railgun20001"]
 edition = "2024"

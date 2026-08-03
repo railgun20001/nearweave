@@ -26,8 +26,8 @@ $versions = @(
     [string]$packageManifest.version,
     [string]$cargoVersionMatch.Groups[1].Value
 )
-if (($versions | Sort-Object -Unique).Count -ne 1 -or $versions[0] -ne "0.4.0") {
-    throw "Manifest versions must all be 0.4.0: $($versions -join ', ')"
+if (($versions | Sort-Object -Unique).Count -ne 1 -or $versions[0] -ne "0.4.1") {
+    throw "Manifest versions must all be 0.4.1: $($versions -join ', ')"
 }
 if ($tauriConfig.productName -cne "NearWeave") {
     throw "The product name must be NearWeave"

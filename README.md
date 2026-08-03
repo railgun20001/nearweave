@@ -159,13 +159,13 @@ Tauri 2 可以承载 Windows、macOS、Linux、Android 和 iOS 界面，但各�
 
 ## 安装与发布
 
-从 [Gitee Releases](https://gitee.com/railgun20001/nearweave/releases) 或 [GitHub Releases](https://github.com/railgun20001/nearweave/releases) 下载 `nearweave_0.4.0_x64-setup.exe`。Gitee 是首选更新源，GitHub 是备用源；两端的安装包与 `.sig` 字节一致。两个 `latest.json` 来自同一次构建并包含相同版本和安装包签名，但分别保留 Gitee、GitHub 下载 URL，才能在首选源故障时真正回退。
+从 [Gitee Releases](https://gitee.com/railgun20001/nearweave/releases) 或 [GitHub Releases](https://github.com/railgun20001/nearweave/releases) 下载 `nearweave_0.4.1_x64-setup.exe`。Gitee 是首选更新源，GitHub 是备用源；两端的安装包与 `.sig` 字节一致。两个 `latest.json` 来自同一次构建并包含相同版本和安装包签名，但分别保留 Gitee、GitHub 下载 URL，才能在首选源故障时真正回退。
 
 Windows 安装器只管理 NearWeave 当前产品目录、安装项、开始菜单项和桌面快捷方式，不检测、卸载或导入其他产品数据。防火墙操作复用已签名的 NearWeave 主程序作为原生 Rust GUI helper，不调用 PowerShell，也不会弹出终端窗口；规则只在用户从应用内明确启用局域网传输时创建。
 
 应用数据保存在 `io.github.railgun20001.nearweave`，接收目录为 `Downloads\NearWeave Received`。安装器不会扫描或导入其他应用目录、身份、信任记录、设置和接收文件。
 
-v0.4.0 安装包具有 Tauri Updater 签名，但在 SignPath Foundation 申请获批前没有 Authenticode，SmartScreen 可能显示未知发布者。获批后的 v0.4.1 将分别签名主程序和安装包，再为最终安装包生成 Updater `.sig` 与 `latest.json`。详见 [SignPath 发布说明](docs/SIGNPATH.md)。
+v0.4.1 安装包具有 Tauri Updater 签名，但在 SignPath Foundation 申请获批前没有 Authenticode，SmartScreen 可能显示未知发布者。申请获批后，后续版本将分别签名主程序和安装包，再为最终安装包生成 Updater `.sig` 与 `latest.json`。详见 [SignPath 发布说明](docs/SIGNPATH.md)。
 
 Updater 私钥、公钥和口令是正式更新链的长期密钥材料。私钥或口令一旦丢失，已安装客户端将无法验证后续更新；维护者必须对 `$env:USERPROFILE\.tauri\nearweave.key` 和同目录的 `.key.password` 做离线备份，仓库只保存公开公钥。
 
